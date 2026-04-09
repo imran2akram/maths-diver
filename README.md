@@ -1,4 +1,4 @@
-# Maths Diver
+# D.A.D.
 
 An adaptive maths game for children with 1980s Amstrad CPC–style graphics.
 
