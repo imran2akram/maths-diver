@@ -505,45 +505,269 @@ function calcDiff() {
 
 // ── Question generation ───────────────────────────────────────
 function rnd(lo, hi) { return lo + Math.floor(Math.random() * (hi - lo + 1)); }
+function pick(arr)   { return arr[rnd(0, arr.length - 1)]; }
+
+// Ages 6–7: number bonds to 10, doubles, halves, counting on, teen ± small
+function genBand1(d) {
+  const r = Math.random();
+  if (r < 0.22) {
+    const a = rnd(1, 9);
+    return { ans: 10, text: `${a} + ${10 - a} = ?` };
+  }
+  if (r < 0.40) {
+    const a = rnd(1, 5), b = rnd(1, 5);
+    return { ans: a + b, text: `${a} + ${b} = ?` };
+  }
+  if (r < 0.55) {
+    const b = rnd(1, 5), a = b + rnd(1, 5);
+    return { ans: a - b, text: `${a} - ${b} = ?` };
+  }
+  if (r < 0.68) {
+    const a = rnd(1, d <= 1 ? 5 : 10);
+    return { ans: a * 2, text: `DOUBLE ${a} = ?` };
+  }
+  if (r < 0.80) {
+    const a = rnd(1, d <= 1 ? 5 : 10) * 2;
+    return { ans: a / 2, text: `HALF OF ${a} = ?` };
+  }
+  if (r < 0.90) {
+    const a = rnd(11, 19);
+    return Math.random() < 0.5 ? { ans: a + 10, text: `${a} + 10 = ?` }
+                                : { ans: a - 10, text: `${a} - 10 = ?` };
+  }
+  const a = rnd(11, 18), b = rnd(1, 4);
+  return Math.random() < 0.5 ? { ans: a + b, text: `${a} + ${b} = ?` }
+                              : { ans: a - b, text: `${a} - ${b} = ?` };
+}
+
+// Ages 8–9: compensation, bridging through 10, tables 2–10, two-digit ops, three-addend reordering
+function genBand2(d) {
+  const r = Math.random();
+  if (r < 0.14) {
+    // Compensation: ±9, ±11, ±19, ±21
+    const offset = pick(d <= 3 ? [9, 11] : [9, 11, 19, 21]);
+    const a = rnd(21, 60);
+    return Math.random() < 0.5 ? { ans: a + offset, text: `${a} + ${offset} = ?` }
+                                : { ans: a - offset, text: `${a} - ${offset} = ?` };
+  }
+  if (r < 0.27) {
+    // Bridging through a ten boundary (b > gap guarantees crossing)
+    const tens = rnd(1, 5) * 10, gap = rnd(1, 7);
+    const a = tens - gap, b = rnd(gap + 1, 9);
+    return { ans: a + b, text: `${a} + ${b} = ?` };
+  }
+  if (r < 0.42) {
+    // Times tables: 2, 3, 4, 5, 8, 10
+    const tbls = d <= 3 ? [2, 5, 10] : [2, 3, 4, 5, 8, 10];
+    const a = pick(tbls), b = rnd(2, 10);
+    return Math.random() < 0.6 ? { ans: a * b, text: `${a} × ${b} = ?` }
+                                : { ans: b, text: `${a * b} ÷ ${a} = ?` };
+  }
+  if (r < 0.54) {
+    // Place-value: two-digit ± multiples of 10 (ensure subtraction stays positive)
+    const b = rnd(1, 3) * 10;
+    const a = rnd(b + 1, 79);
+    return Math.random() < 0.5 ? { ans: a + b, text: `${a} + ${b} = ?` }
+                                : { ans: a - b, text: `${a} - ${b} = ?` };
+  }
+  if (r < 0.66) {
+    // Two two-digit addition
+    const a = rnd(11, 45), b = rnd(11, 45);
+    return { ans: a + b, text: `${a} + ${b} = ?` };
+  }
+  if (r < 0.78) {
+    // Three addends — Fisher-Yates shuffle so two that make 10 may not be adjacent
+    const a = rnd(1, 8), c = 10 - a, b = rnd(1, 9);
+    const arr = [a, b, c];
+    for (let i = 2; i > 0; i--) { const j = rnd(0, i); [arr[i], arr[j]] = [arr[j], arr[i]]; }
+    return { ans: a + b + c, text: `${arr[0]} + ${arr[1]} + ${arr[2]} = ?` };
+  }
+  if (r < 0.88) {
+    // Two-digit subtraction
+    const b = rnd(11, 35), a = b + rnd(5, 35);
+    return { ans: a - b, text: `${a} - ${b} = ?` };
+  }
+  const a = rnd(31, 79), b = rnd(2, 9);
+  return Math.random() < 0.5 ? { ans: a + b, text: `${a} + ${b} = ?` }
+                              : { ans: a - b, text: `${a} - ${b} = ?` };
+}
+
+// Ages 10–11: tables to 12×12, near-hundreds, 3-digit ops, factor tricks, decimal complements
+function genBand3(d) {
+  const r = Math.random();
+  if (r < 0.18) {
+    // Full tables 6–12
+    const a = rnd(6, 12), b = rnd(3, 12);
+    return Math.random() < 0.6 ? { ans: a * b, text: `${a} × ${b} = ?` }
+                                : { ans: b, text: `${a * b} ÷ ${a} = ?` };
+  }
+  if (r < 0.32) {
+    // Near-hundreds: compensation-friendly addends like 99, 101, 199, 201
+    const nearH = pick([98, 99, 101, 102, 198, 199, 201, 202, 298, 299, 301, 302, 398, 399, 401, 402]);
+    const other = rnd(50, 250);
+    return { ans: nearH + other, text: `${nearH} + ${other} = ?` };
+  }
+  if (r < 0.46) {
+    // Three-digit ± two/three-digit
+    const a = rnd(101, 699), b = rnd(10, 199);
+    return Math.random() < 0.5 ? { ans: a + b, text: `${a} + ${b} = ?` }
+                                : { ans: a, text: `${a + b} - ${b} = ?` };
+  }
+  if (r < 0.58) {
+    // Factor tricks: 25×, 4×, 50×, 5×
+    const pairs = [[25, rnd(2, 8) * 4], [4, rnd(3, 8) * 25], [50, rnd(2, 6) * 2], [5, rnd(4, 20)]];
+    const [fa, fb] = pick(pairs);
+    return { ans: fa * fb, text: `${fa} × ${fb} = ?` };
+  }
+  if (r < 0.70) {
+    // Decimal complement: X.a + 0.(10-a) = next whole number
+    const xi = rnd(1, 9), xa = rnd(1, 9);
+    return { ans: xi + 1, text: `${xi}.${xa} + 0.${10 - xa} = ?` };
+  }
+  if (r < 0.80) {
+    // Decimal halves: a.5 + b.5 = a + b + 1
+    const a = rnd(1, 8), b = rnd(1, 8);
+    return { ans: a + b + 1, text: `${a}.5 + ${b}.5 = ?` };
+  }
+  if (r < 0.90) {
+    // Near-20 × single digit (19×, 21×, 18×, 22×)
+    const near = pick([19, 21, 18, 22]), b = rnd(3, 12);
+    return { ans: near * b, text: `${near} × ${b} = ?` };
+  }
+  const a = rnd(12, 99), b = pick([3, 4, 5, 6, 7, 8, 9]);
+  return { ans: a * b, text: `${a} × ${b} = ?` };
+}
+
+// Ages 12–13: percentages, fractions of amounts, signed arithmetic, division by 0.5
+function genBand4(d) {
+  const r = Math.random();
+  if (r < 0.20) {
+    // Clean percentages of clean multiples
+    const combos = [[10, rnd(2,20)*10],[20, rnd(1,10)*10],[25, rnd(1,12)*4],[50, rnd(2,20)*2],[75, rnd(1,8)*4]];
+    const [pct, amt] = pick(combos);
+    return { ans: pct * amt / 100, text: `${pct}% OF ${amt} = ?` };
+  }
+  if (r < 0.38) {
+    // Fraction of amount (halves, quarters, thirds, fifths)
+    const fracs = [{n:1,d:2,m:2},{n:1,d:4,m:4},{n:3,d:4,m:4},{n:1,d:3,m:3},{n:2,d:3,m:3},{n:1,d:5,m:5},{n:2,d:5,m:5}];
+    const f = pick(fracs);
+    const base = rnd(2, 10) * f.m;
+    return { ans: f.n * base / f.d, text: `${f.n}/${f.d} OF ${base} = ?` };
+  }
+  if (r < 0.52) {
+    // Signed: negative + positive gives positive result
+    const b = rnd(6, 15), a = rnd(1, b - 1);
+    return { ans: b - a, text: `-${a} + ${b} = ?` };
+  }
+  if (r < 0.64) {
+    // Decimal halves: a.5 + b.5 = integer
+    const a = rnd(1, 9), b = rnd(1, 9);
+    return { ans: a + b + 1, text: `${a}.5 + ${b}.5 = ?` };
+  }
+  if (r < 0.75) {
+    // Division by 0.5 (equivalent to doubling)
+    const a = rnd(2, 20);
+    return { ans: a * 2, text: `${a} ÷ 0.5 = ?` };
+  }
+  if (r < 0.87) {
+    // Two-digit × single digit with friendly structure
+    const a = rnd(2, 9) * 10 + pick([1, 2, 3, 5, 9]);
+    const b = rnd(2, 9);
+    return { ans: a * b, text: `${a} × ${b} = ?` };
+  }
+  const a = rnd(100, 500), b = rnd(11, 99);
+  return { ans: a - b, text: `${a} - ${b} = ?` };
+}
+
+// Ages 14–16: harder percentages, square roots, near-100 multiplication, factor simplifications
+function genBand5(d) {
+  const r = Math.random();
+  if (r < 0.20) {
+    // Harder percentages of clean amounts
+    const combos = [[15, rnd(2,8)*20],[35, rnd(1,5)*20],[12.5, rnd(1,8)*8],[17.5, rnd(1,4)*80]];
+    const [pct, amt] = pick(combos);
+    return { ans: Math.round(pct * amt / 100), text: `${pct}% OF ${amt} = ?` };
+  }
+  if (r < 0.34) {
+    // Square roots of perfect squares
+    const sq = pick([4,9,16,25,36,49,64,81,100,121,144,169,196,225,256]);
+    return { ans: Math.round(Math.sqrt(sq)), text: `√${sq} = ?` };
+  }
+  if (r < 0.48) {
+    // Fractions of larger amounts (eighths, fifths, sixths)
+    const fracs = [{n:3,d:8,m:8},{n:5,d:8,m:8},{n:3,d:5,m:5},{n:2,d:5,m:5},{n:7,d:8,m:8},{n:5,d:6,m:6}];
+    const f = pick(fracs);
+    const base = rnd(2, 10) * f.m;
+    return { ans: f.n * base / f.d, text: `${f.n}/${f.d} OF ${base} = ?` };
+  }
+  if (r < 0.62) {
+    // Near-100 multiplication: 99×, 101×, 98×, 102×
+    const near = pick([99, 101, 98, 102]), b = rnd(2, 12);
+    return { ans: near * b, text: `${near} × ${b} = ?` };
+  }
+  if (r < 0.74) {
+    // Benchmark factor multiplication: 125×, 25×, 250×
+    const pairs = [[125, rnd(1,5)*8],[25, rnd(2,10)*4],[250, rnd(1,4)*4]];
+    const [fa, fb] = pick(pairs);
+    return { ans: fa * fb, text: `${fa} × ${fb} = ?` };
+  }
+  if (r < 0.86) {
+    // Division by 0.25 (×4) or 0.5 (×2) — use multiplication to avoid floating-point division
+    const div = pick([0.25, 0.5]);
+    const a = rnd(2, 20);
+    return { ans: div === 0.5 ? a * 2 : a * 4, text: `${a} ÷ ${div} = ?` };
+  }
+  const a = rnd(15, 50), b = rnd(11, 25);
+  return { ans: a * b, text: `${a} × ${b} = ?` };
+}
+
+// Ages 17–18: difference of squares, near-1000, benchmark percentages, factor cancellation
+function genBand6() {
+  const r = Math.random();
+  if (r < 0.18) {
+    // Difference of squares: (n+k)(n-k) = n²-k²
+    const n = rnd(10, 30), k = pick([1, 2, 3]);
+    return { ans: n * n - k * k, text: `${n + k} × ${n - k} = ?` };
+  }
+  if (r < 0.34) {
+    // Near-1000 multiplication
+    const near = pick([999, 1001, 998, 1002]), b = rnd(2, 9);
+    return { ans: near * b, text: `${near} × ${b} = ?` };
+  }
+  if (r < 0.50) {
+    // Benchmark percentages: 7.5%, 12.5%, 37.5%, 62.5%
+    const combos = [[12.5, rnd(2,10)*80],[37.5, rnd(1,4)*80],[62.5, rnd(1,4)*80],[7.5, rnd(2,8)*80]];
+    const [pct, amt] = pick(combos);
+    return { ans: Math.round(pct * amt / 100), text: `${pct}% OF ${amt} = ?` };
+  }
+  if (r < 0.64) {
+    // Division by 0.125 (×8) or 0.25 (×4)
+    if (Math.random() < 0.5) {
+      const a = rnd(1, 12);
+      return { ans: a * 8, text: `${a} ÷ 0.125 = ?` };
+    }
+    const a = rnd(1, 20);
+    return { ans: a * 4, text: `${a} ÷ 0.25 = ?` };
+  }
+  if (r < 0.78) {
+    // Factor cancellation: a × (factor × b) ÷ factor = a × b
+    const factor = pick([4, 5, 8, 10, 25]);
+    const a = rnd(3, 15), b = rnd(2, 8);
+    return { ans: a * b, text: `${a} × ${factor * b} ÷ ${factor} = ?` };
+  }
+  // Squaring in the expert range
+  const n = rnd(12, 30);
+  return { ans: n * n, text: `${n} × ${n} = ?` };
+}
 
 function genQ() {
   const d = calcDiff();
-  let a, b, op, ans;
-
-  const r = Math.random();
-
-  if (d <= 2) {
-    // Add/sub within 10
-    if (r < 0.6) { op='+'; a=rnd(1,5); b=rnd(1,5); ans=a+b; }
-    else          { op='-'; b=rnd(1,5); a=b+rnd(1,5); ans=a-b; }
-
-  } else if (d <= 4) {
-    // Add/sub within 20
-    if (r < 0.55) { op='+'; a=rnd(2,12); b=rnd(2,12); ans=a+b; }
-    else           { op='-'; b=rnd(1,10); a=b+rnd(2,12); ans=a-b; }
-
-  } else if (d <= 6) {
-    // Add/sub to 50 + easy ×
-    if (r < 0.35)      { op='+'; a=rnd(5,25); b=rnd(5,25); ans=a+b; }
-    else if (r < 0.65) { op='-'; b=rnd(5,20); a=b+rnd(5,20); ans=a-b; }
-    else               { op='×'; a=[2,3,5,10][rnd(0,3)]; b=rnd(1,10); ans=a*b; }
-
-  } else if (d <= 8) {
-    // All 4 ops, medium numbers
-    if (r < 0.25)      { op='+'; a=rnd(10,50); b=rnd(10,50); ans=a+b; }
-    else if (r < 0.5)  { op='-'; b=rnd(5,30);  a=b+rnd(10,30); ans=a-b; }
-    else if (r < 0.75) { op='×'; a=rnd(2,9);   b=rnd(2,9);  ans=a*b; }
-    else               { op='÷'; ans=rnd(2,10); b=rnd(2,9); a=ans*b; }
-
-  } else {
-    // Hard: full times tables, larger numbers, division
-    if (r < 0.25)      { op='+'; a=rnd(20,99);  b=rnd(20,99);  ans=a+b; }
-    else if (r < 0.4)  { op='-'; b=rnd(10,50);  a=b+rnd(20,60); ans=a-b; }
-    else if (r < 0.7)  { op='×'; a=rnd(3,12);   b=rnd(3,12);   ans=a*b; }
-    else               { op='÷'; ans=rnd(3,12);  b=rnd(3,12);   a=ans*b; }
-  }
-
-  return { a, b, op, ans, text: `${a} ${op} ${b} = ?` };
+  if (playerAge <= 7)  return genBand1(d);
+  if (playerAge <= 9)  return genBand2(d);
+  if (playerAge <= 11) return genBand3(d);
+  if (playerAge <= 13) return genBand4(d);
+  if (playerAge <= 16) return genBand5(d);
+  return genBand6();
 }
 
 // ── UI helpers ────────────────────────────────────────────────
