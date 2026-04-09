@@ -2,6 +2,8 @@
 
 An adaptive maths game for children with 1980s Amstrad CPC–style graphics.
 
+🎮 **Play it live:** https://imran2akram.github.io/maths-diver/
+
 ## How to play
 
 Open `index.html` in any modern browser — no build step, no dependencies.
