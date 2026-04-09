@@ -576,9 +576,10 @@ function genBand2(d) {
     return { ans: a + b, text: `${a} + ${b} = ?` };
   }
   if (r < 0.78) {
-    // Three addends — shuffle so two that make 10 are not adjacent
+    // Three addends — Fisher-Yates shuffle so two that make 10 may not be adjacent
     const a = rnd(1, 8), c = 10 - a, b = rnd(1, 9);
-    const arr = [a, b, c].sort(() => Math.random() - 0.5);
+    const arr = [a, b, c];
+    for (let i = 2; i > 0; i--) { const j = rnd(0, i); [arr[i], arr[j]] = [arr[j], arr[i]]; }
     return { ans: a + b + c, text: `${arr[0]} + ${arr[1]} + ${arr[2]} = ?` };
   }
   if (r < 0.88) {
@@ -602,7 +603,7 @@ function genBand3(d) {
   }
   if (r < 0.32) {
     // Near-hundreds: compensation-friendly addends like 99, 101, 199, 201
-    const nearH = pick([98, 99, 101, 102, 198, 199, 201, 202, 298, 299, 301, 302, 398, 399, 401]);
+    const nearH = pick([98, 99, 101, 102, 198, 199, 201, 202, 298, 299, 301, 302, 398, 399, 401, 402]);
     const other = rnd(50, 250);
     return { ans: nearH + other, text: `${nearH} + ${other} = ?` };
   }
@@ -711,10 +712,10 @@ function genBand5(d) {
     return { ans: fa * fb, text: `${fa} × ${fb} = ?` };
   }
   if (r < 0.86) {
-    // Division by 0.25 or 0.5
+    // Division by 0.25 (×4) or 0.5 (×2) — use multiplication to avoid floating-point division
     const div = pick([0.25, 0.5]);
     const a = rnd(2, 20);
-    return { ans: Math.round(a / div), text: `${a} ÷ ${div} = ?` };
+    return { ans: div === 0.5 ? a * 2 : a * 4, text: `${a} ÷ ${div} = ?` };
   }
   const a = rnd(15, 50), b = rnd(11, 25);
   return { ans: a * b, text: `${a} × ${b} = ?` };
