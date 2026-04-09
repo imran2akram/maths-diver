@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Maths Diver</title>
+<title>D.A.D.</title>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -128,7 +128,7 @@ body {
 <div id="wrap">
   <canvas id="gameCanvas"></canvas>
   <div id="ui">
-    <div id="qtext">MATHS DIVER</div>
+    <div id="qtext">D.A.D.</div>
     <div id="fb"></div>
     <div id="input-row">
       <input id="ain" type="number" inputmode="numeric" pattern="[0-9]*" placeholder="?">
@@ -141,7 +141,7 @@ body {
 <script>
 'use strict';
 // ═══════════════════════════════════════════════════════════════
-//  MATHS DIVER  –  Amstrad CPC–style adaptive maths game
+//  D.A.D.  –  Daily Arithmetic Diver (DAD) – Amstrad CPC–style adaptive maths game
 //  Single HTML file, no dependencies.
 // ═══════════════════════════════════════════════════════════════
 
@@ -419,12 +419,12 @@ function drawStartScreen() {
   fill(8, 38, VW - 16, 2, C.CYAN);
   fill(8, 14, 2, 26, C.CYAN);
   fill(VW - 10, 14, 2, 26, C.CYAN);
-  textC('MATHS  DIVER', 17, C.YELLOW, 12);
+  textC('D.A.D.', 17, C.YELLOW, 12);
 
   // Decorative sub-line
   fill(8, 42, VW - 16, 2, C.MAGENTA);
 
-  textC('AMSTRAD ADAPTIVE MATHS', 50, C.CYAN,  6);
+  textC('Daily Arithmetic Diver (DAD)', 50, C.CYAN,  6);
   textC('CLIMB THE LADDER ! DIVE !', 60, C.WHITE, 6);
 
   // Sample ladder
