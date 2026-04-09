@@ -26,6 +26,17 @@ Open `index.html` in any modern browser — no build step, no dependencies.
 | Touch friendly | On-screen numpad works on any phone or tablet |
 | Keyboard friendly | Type numbers and press Enter on desktop |
 
+## Deployment
+
+The GitHub Actions workflow deploys to a `gh-pages` branch on every push to `main`.
+To make the site live, a **one-time** step is needed in the repository settings:
+
+1. Go to **Settings → Pages**
+2. Under **Source**, choose **Deploy from a branch**
+3. Select the **`gh-pages`** branch and `/ (root)` folder, then click **Save**
+
+After that, the site will be live at https://imran2akram.github.io/maths-diver/ and will update automatically on every push to `main`.
+
 ## Controls
 
 Only two input actions are ever needed:
