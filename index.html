@@ -1,0 +1,806 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Maths Diver</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: #000011;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  height: 100vh;    /* fallback for browsers without dvh support */
+  height: 100dvh;   /* dvh excludes mobile browser chrome */
+  overflow: hidden;
+  font-family: 'Courier New', Courier, monospace;
+  touch-action: manipulation;
+}
+
+#wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  height: 100%;
+}
+
+#gameCanvas {
+  display: block;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  flex-shrink: 0;
+}
+
+/* ── Input / UI panel ── */
+#ui {
+  width: 100%;
+  max-width: 480px;
+  background: #00001a;
+  border-top: 2px solid #00ffff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 8px 4px;
+  flex-shrink: 0;
+}
+
+#qtext {
+  font-size: clamp(14px, 4vw, 22px);
+  color: #ffff00;
+  letter-spacing: 2px;
+  text-align: center;
+  min-height: 1.4em;
+}
+
+#fb {
+  font-size: clamp(12px, 3.5vw, 18px);
+  min-height: 1.3em;
+  letter-spacing: 2px;
+  text-align: center;
+  color: #00ff00;
+}
+
+#input-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+#ain {
+  font-family: 'Courier New', monospace;
+  font-size: clamp(18px, 5vw, 26px);
+  width: clamp(80px, 22vw, 130px);
+  background: #000033;
+  color: #00ffff;
+  border: 2px solid #00ffff;
+  padding: 3px 6px;
+  text-align: center;
+  -moz-appearance: textfield;
+}
+#ain::-webkit-inner-spin-button,
+#ain::-webkit-outer-spin-button { -webkit-appearance: none; }
+
+#okbtn {
+  font-family: 'Courier New', monospace;
+  font-size: clamp(14px, 4vw, 20px);
+  background: #003300;
+  color: #00ff00;
+  border: 2px solid #00ff00;
+  padding: 5px 14px;
+  cursor: pointer;
+  letter-spacing: 1px;
+}
+#okbtn:active { background: #006600; }
+
+/* Numpad */
+#numpad {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 3px;
+  width: clamp(200px, 55vw, 300px);
+}
+
+.nk {
+  font-family: 'Courier New', monospace;
+  font-size: clamp(15px, 4vw, 22px);
+  background: #001133;
+  color: #ffffff;
+  border: 2px solid #003377;
+  padding: 8px 0;
+  cursor: pointer;
+  text-align: center;
+  user-select: none;
+  -webkit-user-select: none;
+  border-radius: 2px;
+}
+.nk:active { background: #002255; }
+.nk.del { background: #220000; border-color: #880000; }
+.nk.ok  { background: #002200; border-color: #008800; }
+.nk.blank { visibility: hidden; pointer-events: none; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="gameCanvas"></canvas>
+  <div id="ui">
+    <div id="qtext">MATHS DIVER</div>
+    <div id="fb"></div>
+    <div id="input-row">
+      <input id="ain" type="number" inputmode="numeric" pattern="[0-9]*" placeholder="?">
+      <button id="okbtn">OK</button>
+    </div>
+    <div id="numpad"></div>
+  </div>
+</div>
+
+<script>
+'use strict';
+// ═══════════════════════════════════════════════════════════════
+//  MATHS DIVER  –  Amstrad CPC–style adaptive maths game
+//  Single HTML file, no dependencies.
+// ═══════════════════════════════════════════════════════════════
+
+// ── Virtual resolution (Amstrad CPC Mode-1) ──────────────────
+const VW = 320, VH = 200;
+
+const canvas = document.getElementById('gameCanvas');
+const ctx    = canvas.getContext('2d');
+
+// ── Amstrad CPC colour palette ────────────────────────────────
+const C = {
+  BLACK  : '#000000', WHITE  : '#ffffff',
+  CYAN   : '#00ffff', MAGENTA: '#ff00ff',
+  YELLOW : '#ffff00', RED    : '#ff0000',
+  GREEN  : '#00ff00', BLUE   : '#0000ff',
+  DKBLUE : '#000080', DKGREEN: '#004000',
+  ORANGE : '#ff8000', SKIN   : '#ffcc88',
+  BROWN  : '#884400', LTBLUE : '#4488ff',
+  GREY   : '#888888', DKGREY : '#444444',
+  CREAM  : '#ffeecc', PINK   : '#ff88aa',
+};
+
+// ── Layout constants (virtual px) ────────────────────────────
+const LADDER_X      = 50;        // left rail x
+const LADDER_W      = 18;        // rail-to-rail width
+const LADDER_TOP    = 28;        // y of top rung
+const LADDER_BOTTOM = 175;       // y of bottom rung
+const MAX_RUNGS     = 10;
+const RUNG_GAP      = (LADDER_BOTTOM - LADDER_TOP) / MAX_RUNGS;
+
+// Board starts at top of ladder and extends right
+const BOARD_X       = LADDER_X + LADDER_W;
+const BOARD_Y       = LADDER_TOP - 4;
+const BOARD_LEN     = 110;
+const BOARD_END_X   = BOARD_X + BOARD_LEN;
+
+// Pool (landing zone)
+const POOL_X = BOARD_END_X - 40;
+const POOL_W = 80;
+const POOL_Y = 168;
+const POOL_H = 12;
+
+// Character size (in virtual px)
+const CW = 14, CH = 20;
+
+// ── State machine ─────────────────────────────────────────────
+const S = {
+  START      : 'start',
+  PLAYING    : 'playing',
+  MOVE_UP    : 'move_up',
+  MOVE_DOWN  : 'move_down',
+  CELEBRATE  : 'celebrate',
+  DIVE       : 'dive',
+  PARACHUTE  : 'parachute',
+  LANDING    : 'landing',
+  LEVEL_DONE : 'level_done',
+};
+let state = S.START;
+
+// ── Game state ────────────────────────────────────────────────
+let playerAge      = 8;
+let level          = 1;
+let rung           = 0;
+let score          = 0;
+let skillPts       = 10;   // 0-20, adaptive difficulty seed
+let currentQ       = null;
+let answersBlocked = false;
+
+// ── Animation state ───────────────────────────────────────────
+let animTick  = 0;          // increments every frame
+let charX     = 0;
+let charY     = 0;
+let diveVY    = 0;
+
+// ── Scale helper ──────────────────────────────────────────────
+let scale = 1;
+
+function px(n) { return Math.round(n * scale); }
+
+function resize() {
+  const uiH    = document.getElementById('ui').offsetHeight || 220;
+  const availW = window.innerWidth;
+  const availH = window.innerHeight - uiH;
+  scale = Math.min(availW / VW, availH / VH);
+  scale = Math.max(0.8, Math.floor(scale * 4) / 4); // min 0.8 keeps UI legible; quarter steps keep pixels sharp
+  canvas.width  = Math.round(VW * scale);
+  canvas.height = Math.round(VH * scale);
+}
+
+// ── Audio (simple Web-Audio beeps) ───────────────────────────
+let ac = null;
+function getAC() {
+  if (!ac) ac = new (window.AudioContext || window.webkitAudioContext)();
+  if (ac.state === 'suspended') ac.resume();
+  return ac;
+}
+function beep(freq, dur, type = 'square', vol = 0.25) {
+  try {
+    const a  = getAC();
+    const o  = a.createOscillator();
+    const g  = a.createGain();
+    o.connect(g); g.connect(a.destination);
+    o.type = type;
+    o.frequency.value = freq;
+    g.gain.setValueAtTime(vol, a.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, a.currentTime + dur);
+    o.start(); o.stop(a.currentTime + dur);
+  } catch (_) {}
+}
+function sfxCorrect()  { beep(523,.09); setTimeout(()=>beep(659,.09),90); setTimeout(()=>beep(784,.18),180); }
+function sfxWrong()    { beep(160,.35,'sawtooth',.35); }
+function sfxStep()     { beep(55+Math.random()*30,.04,'square',.12); }
+function sfxSplash()   { [220,196,175,155].forEach((f,i)=>setTimeout(()=>beep(f,.12),i*55)); }
+function sfxLevelUp()  { [392,523,659,784,1047].forEach((f,i)=>setTimeout(()=>beep(f,.1),i*90)); }
+function sfxChute()    { beep(110,.5,'square',.2); }
+
+// ── Drawing primitives ────────────────────────────────────────
+function fill(x, y, w, h, col) {
+  ctx.fillStyle = col;
+  ctx.fillRect(px(x), px(y), Math.max(1, px(w)), Math.max(1, px(h)));
+}
+
+function text(str, x, y, col, sz = 7) {
+  ctx.fillStyle   = col;
+  ctx.font        = `bold ${px(sz)}px "Courier New",monospace`;
+  ctx.textBaseline = 'top';
+  ctx.fillText(str, px(x), px(y));
+}
+
+function textC(str, y, col, sz = 7) {
+  ctx.fillStyle   = col;
+  ctx.font        = `bold ${px(sz)}px "Courier New",monospace`;
+  ctx.textBaseline = 'top';
+  const w = ctx.measureText(str).width;
+  ctx.fillText(str, Math.round((canvas.width - w) / 2), px(y));
+}
+
+// ── Background ────────────────────────────────────────────────
+const STARS = [
+  [15,8],[45,4],[80,14],[120,6],[165,11],[210,3],[255,16],[295,8],[300,22],
+  [33,22],[98,28],[185,20],[240,25],[70,30],[145,35],[270,18],
+];
+
+function drawBg() {
+  // Sky
+  fill(0, 0, VW, POOL_Y + 2, C.DKBLUE);
+  // Stars
+  STARS.forEach(([sx,sy]) => fill(sx, sy, 2, 2, C.YELLOW));
+  // Ground strip
+  fill(0, POOL_Y + 2, VW, VH - POOL_Y - 2, C.DKGREEN);
+  fill(0, POOL_Y + 2, VW, 2, C.GREEN);
+  // Pool
+  fill(POOL_X, POOL_Y, POOL_W, POOL_H, C.BLUE);
+  fill(POOL_X + 2, POOL_Y, POOL_W - 4, 3, C.LTBLUE);
+  fill(POOL_X, POOL_Y + POOL_H, POOL_W, 2, C.DKGREEN);
+  // Pool label
+  text('POOL', POOL_X + 22, POOL_Y + 3, C.CYAN, 5);
+}
+
+// ── Ladder ────────────────────────────────────────────────────
+function drawLadder() {
+  // Rails
+  fill(LADDER_X,              LADDER_TOP, 4, LADDER_BOTTOM - LADDER_TOP, C.BROWN);
+  fill(LADDER_X + LADDER_W,   LADDER_TOP, 4, LADDER_BOTTOM - LADDER_TOP, C.BROWN);
+  // Rungs
+  for (let i = 0; i <= MAX_RUNGS; i++) {
+    const ry = rungY(i);
+    fill(LADDER_X, ry - 1, LADDER_W + 4, 3, C.YELLOW);
+  }
+}
+
+function rungY(n) {
+  return Math.round(LADDER_BOTTOM - n * RUNG_GAP);
+}
+
+// ── Diving board ──────────────────────────────────────────────
+function drawBoard() {
+  // Support pillar at ladder top
+  fill(LADDER_X + 2, BOARD_Y - 6, 14, 10, C.DKGREY);
+  fill(LADDER_X + 3, BOARD_Y - 5, 12, 8,  C.GREY);
+  // Board plank
+  fill(BOARD_X, BOARD_Y,     BOARD_LEN,     4, C.WHITE);
+  fill(BOARD_X, BOARD_Y,     BOARD_LEN,     2, C.GREY);
+  fill(BOARD_X, BOARD_Y + 4, BOARD_LEN - 2, 1, C.DKGREY);
+  // Springy tip
+  fill(BOARD_END_X - 4, BOARD_Y - 2, 6, 3, C.WHITE);
+  // Arrow hint
+  text('→ JUMP!', BOARD_X + BOARD_LEN / 2 - 10, BOARD_Y - 9, C.CYAN, 5);
+}
+
+// ── HUD ───────────────────────────────────────────────────────
+function drawHUD() {
+  fill(0, 0, VW, 14, C.BLACK);
+  fill(0, 13, VW, 1, C.CYAN);
+  text(`LV:${level}`,       3,  3, C.CYAN,    7);
+  text(`SCR:${score}`,     40,  3, C.YELLOW,  7);
+  // Rung progress bar
+  const barX = 130, barW = 90;
+  fill(barX, 3, barW, 7, C.DKGREY);
+  fill(barX, 3, Math.round(barW * rung / MAX_RUNGS), 7, C.GREEN);
+  text(`${rung}/${MAX_RUNGS}`, barX + barW + 3, 3, C.GREEN, 7);
+  // Difficulty
+  const diff = calcDiff();
+  text(`DIFF:${diff}`, 256, 3, C.MAGENTA, 7);
+}
+
+// ── Character ─────────────────────────────────────────────────
+// frame 0=stand, 1=walk-A, 2=walk-B   facing right always
+function drawChar(cx, cy, frame, showChute) {
+  const p = 2; // pixel scale within virtual coords
+
+  if (showChute) {
+    // Parachute canopy (semicircle via arcs)
+    const cpx = px(cx + CW / 2);
+    const cpy = px(cy - 26);
+    const cpr = px(18);
+    ctx.fillStyle = C.MAGENTA;
+    ctx.beginPath();
+    ctx.ellipse(cpx, cpy, cpr, px(12), 0, Math.PI, 0);
+    ctx.fill();
+    ctx.fillStyle = C.YELLOW;
+    ctx.beginPath();
+    ctx.ellipse(cpx, cpy, px(5), px(12), 0, Math.PI, 0);
+    ctx.fill();
+    // Lines from harness to chute
+    ctx.strokeStyle = C.WHITE;
+    ctx.lineWidth   = Math.max(1, px(0.5));
+    [[cx + 2, cy], [cx + CW - 2, cy], [cx + CW / 2, cy]].forEach(([lx, ly]) => {
+      ctx.beginPath();
+      ctx.moveTo(px(lx), px(ly));
+      ctx.lineTo(cpx, cpy + px(12));
+      ctx.stroke();
+    });
+  }
+
+  // ── HEAD ──
+  fill(cx + p, cy,         CW - 2*p, 5*p, C.SKIN);
+  fill(cx + p, cy,         CW - 2*p, p,   C.BROWN); // hair
+  fill(cx + 2*p, cy + p,   p, p, C.BLACK);          // left eye
+  fill(cx + CW - 3*p, cy + p, p, p, C.BLACK);       // right eye
+  fill(cx + 2*p, cy + 3*p, 4*p, p, C.PINK);         // mouth
+
+  // ── BODY (shirt) ──
+  fill(cx + p, cy + 5*p, CW - 2*p, 5*p, C.BLUE);
+
+  // ── ARMS ──
+  const laOff = frame === 1 ? p : 0;
+  const raOff = frame === 2 ? p : 0;
+  fill(cx,         cy + 5*p + laOff, p,     4*p, C.SKIN);
+  fill(cx + CW-p,  cy + 5*p + raOff, p,     4*p, C.SKIN);
+
+  // ── LEGS ──
+  const llOff = frame === 1 ? p : 0;
+  const rlOff = frame === 2 ? p : 0;
+  fill(cx + p,         cy + 10*p + llOff, 2*p, 6*p, C.DKBLUE);
+  fill(cx + CW - 3*p,  cy + 10*p + rlOff, 2*p, 6*p, C.DKBLUE);
+
+  // ── FEET ──
+  fill(cx,             cy + 15*p + llOff, 3*p, 2*p, C.BLACK);
+  fill(cx + CW - 3*p,  cy + 15*p + rlOff, 3*p, 2*p, C.BLACK);
+}
+
+// ── Start screen ──────────────────────────────────────────────
+function drawStartScreen() {
+  fill(0, 0, VW, VH, C.BLACK);
+  // Sky gradient blocks (Amstrad style)
+  fill(0, 0,  VW, 20, '#000044');
+  fill(0, 20, VW, 20, '#000055');
+  fill(0, 40, VW, VH - 40, C.DKBLUE);
+  STARS.forEach(([sx,sy]) => fill(sx, sy, 2, 2, C.YELLOW));
+
+  // Title box
+  fill(8, 14, VW - 16, 26, C.BLACK);
+  fill(8, 14, VW - 16, 2, C.CYAN);
+  fill(8, 38, VW - 16, 2, C.CYAN);
+  fill(8, 14, 2, 26, C.CYAN);
+  fill(VW - 10, 14, 2, 26, C.CYAN);
+  textC('MATHS  DIVER', 17, C.YELLOW, 12);
+
+  // Decorative sub-line
+  fill(8, 42, VW - 16, 2, C.MAGENTA);
+
+  textC('AMSTRAD ADAPTIVE MATHS', 50, C.CYAN,  6);
+  textC('CLIMB THE LADDER ! DIVE !', 60, C.WHITE, 6);
+
+  // Sample ladder
+  const sx = 35, sb = 155, st = 85;
+  fill(sx,      st, 4, sb - st, C.BROWN);
+  fill(sx + 18, st, 4, sb - st, C.BROWN);
+  for (let i = 0; i <= 7; i++) {
+    fill(sx, sb - i * 10, 22, 3, C.YELLOW);
+  }
+  // Character on ladder (animated walk)
+  const wFrame = Math.floor(animTick / 8) % 3;
+  const walkY  = 100 - Math.floor(animTick / 40) % 5 * 10;
+  drawChar(sx + 2, walkY, wFrame, false);
+
+  // Parachute guy
+  drawChar(200, 100 + Math.sin(animTick * 0.05) * 8, 0, true);
+
+  textC('ENTER YOUR AGE (4-18)', 162, C.GREEN,  7);
+  textC('THEN PRESS OK', 173, C.GREEN,  6);
+
+  // Bottom border
+  for (let bx = 0; bx < VW; bx += 8) {
+    fill(bx,     VH - 7, 4, 4, C.CYAN);
+    fill(bx + 4, VH - 7, 4, 4, C.BLACK);
+  }
+}
+
+// ── Main game scene ───────────────────────────────────────────
+function drawGameScene() {
+  drawBg();
+  drawLadder();
+  drawBoard();
+  drawHUD();
+
+  const wFrame = Math.floor(animTick / 7) % 3;
+
+  if (state === S.PARACHUTE) {
+    drawChar(charX, charY, 0, true);
+  } else if (state === S.CELEBRATE || state === S.DIVE) {
+    drawChar(charX, charY, wFrame, false);
+  } else if (state === S.LANDING) {
+    // splash rings
+    const cx = px(charX + CW / 2);
+    const cy = px(POOL_Y + 4);
+    const r  = Math.min(animTick * px(1.5), px(14));
+    ctx.strokeStyle = C.CYAN;
+    ctx.lineWidth   = Math.max(1, px(1));
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
+    if (r > px(4)) {
+      ctx.beginPath(); ctx.arc(cx, cy, r - px(4), 0, Math.PI * 2); ctx.stroke();
+    }
+  } else {
+    drawChar(charX, charY, 0, false);
+  }
+}
+
+// ── Level done overlay ────────────────────────────────────────
+function drawLevelDone() {
+  drawGameScene();
+  fill(30, 75, VW - 60, 50, C.BLACK);
+  fill(30, 75, VW - 60, 2, C.YELLOW);
+  fill(30, 123, VW - 60, 2, C.YELLOW);
+  fill(30, 75, 2, 50, C.YELLOW);
+  fill(VW - 32, 75, 2, 50, C.YELLOW);
+  textC(`LEVEL ${level} DONE!`,   83, C.YELLOW, 10);
+  textC(`SCORE: ${score}`,        98, C.CYAN,   8);
+  textC('NEXT LEVEL...', 110, C.GREEN,  7);
+}
+
+// ── Difficulty calculation ────────────────────────────────────
+// base = 1 + level contribution (×0.6 per level) + age contribution (×0.4 above age 6)
+// adapt = skill-point deviation from neutral (10), scaled to ±2 range
+function calcDiff() {
+  const base   = Math.min(9, 1 + (level - 1) * 0.6 + (playerAge - 6) * 0.4);
+  const adapt  = (skillPts - 10) / 5; // -2 … +2
+  return Math.max(1, Math.min(10, Math.round(base + adapt)));
+}
+
+// ── Question generation ───────────────────────────────────────
+function rnd(lo, hi) { return lo + Math.floor(Math.random() * (hi - lo + 1)); }
+
+function genQ() {
+  const d = calcDiff();
+  let a, b, op, ans;
+
+  const r = Math.random();
+
+  if (d <= 2) {
+    // Add/sub within 10
+    if (r < 0.6) { op='+'; a=rnd(1,5); b=rnd(1,5); ans=a+b; }
+    else          { op='-'; b=rnd(1,5); a=b+rnd(1,5); ans=a-b; }
+
+  } else if (d <= 4) {
+    // Add/sub within 20
+    if (r < 0.55) { op='+'; a=rnd(2,12); b=rnd(2,12); ans=a+b; }
+    else           { op='-'; b=rnd(1,10); a=b+rnd(2,12); ans=a-b; }
+
+  } else if (d <= 6) {
+    // Add/sub to 50 + easy ×
+    if (r < 0.35)      { op='+'; a=rnd(5,25); b=rnd(5,25); ans=a+b; }
+    else if (r < 0.65) { op='-'; b=rnd(5,20); a=b+rnd(5,20); ans=a-b; }
+    else               { op='×'; a=[2,3,5,10][rnd(0,3)]; b=rnd(1,10); ans=a*b; }
+
+  } else if (d <= 8) {
+    // All 4 ops, medium numbers
+    if (r < 0.25)      { op='+'; a=rnd(10,50); b=rnd(10,50); ans=a+b; }
+    else if (r < 0.5)  { op='-'; b=rnd(5,30);  a=b+rnd(10,30); ans=a-b; }
+    else if (r < 0.75) { op='×'; a=rnd(2,9);   b=rnd(2,9);  ans=a*b; }
+    else               { op='÷'; ans=rnd(2,10); b=rnd(2,9); a=ans*b; }
+
+  } else {
+    // Hard: full times tables, larger numbers, division
+    if (r < 0.25)      { op='+'; a=rnd(20,99);  b=rnd(20,99);  ans=a+b; }
+    else if (r < 0.4)  { op='-'; b=rnd(10,50);  a=b+rnd(20,60); ans=a-b; }
+    else if (r < 0.7)  { op='×'; a=rnd(3,12);   b=rnd(3,12);   ans=a*b; }
+    else               { op='÷'; ans=rnd(3,12);  b=rnd(3,12);   a=ans*b; }
+  }
+
+  return { a, b, op, ans, text: `${a} ${op} ${b} = ?` };
+}
+
+// ── UI helpers ────────────────────────────────────────────────
+function setQ(str)           { document.getElementById('qtext').textContent = str; }
+function setFB(str, col='')  { const e=document.getElementById('fb'); e.textContent=str; e.style.color=col; }
+function clearInput()        { const e=document.getElementById('ain'); e.value=''; e.focus(); }
+
+function showQuestion() {
+  setQ(currentQ.text);
+  clearInput();
+  setFB('', '');
+}
+
+// ── Character placement ───────────────────────────────────────
+function placeOnRung(n) {
+  charX = LADDER_X + 1;
+  charY = rungY(n) - CH;
+}
+
+// ── Smooth movement animation ─────────────────────────────────
+function animateMove(fromRung, toRung, onDone) {
+  const fromY = rungY(fromRung) - CH;
+  const toY   = rungY(toRung)   - CH;
+  charX = LADDER_X + 1;
+  charY = fromY;
+  const STEPS = 18;
+  let step = 0;
+
+  function tick() {
+    step++;
+    const t = step / STEPS;
+    const eased = t < 0.5 ? 2*t*t : -1+(4-2*t)*t; // ease in-out
+    charY = fromY + (toY - fromY) * eased;
+    if (step < STEPS) requestAnimationFrame(tick);
+    else { charY = toY; onDone(); }
+  }
+  requestAnimationFrame(tick);
+}
+
+// ── Celebrate: run across board ───────────────────────────────
+function startCelebration() {
+  state = S.CELEBRATE;
+  setFB('TOP RUNG! RUN! RUN! RUN!', C.YELLOW);
+  placeOnRung(MAX_RUNGS);
+
+  function runStep() {
+    if (state !== S.CELEBRATE) return;
+    charX += 2.5;
+    sfxStep();
+    if (charX + CW >= BOARD_END_X) {
+      charX = BOARD_END_X - CW;
+      startDive();
+      return;
+    }
+    setTimeout(runStep, 40);
+  }
+  setTimeout(runStep, 80);
+}
+
+// ── Dive sequence ─────────────────────────────────────────────
+function startDive() {
+  state  = S.DIVE;
+  diveVY = -2.5; // initial upward kick
+  charY  = BOARD_Y - CH;
+
+  function diveStep() {
+    if (state === S.PARACHUTE) return; // already switched
+    diveVY += 0.6; // gravity
+    charY  += diveVY;
+
+    if (diveVY >= 0 && state === S.DIVE) {
+      // Parachute opens at apex
+      state  = S.PARACHUTE;
+      diveVY = 0.3;
+      sfxChute();
+      setFB('PARACHUTE OPEN!', C.CYAN);
+    }
+    if (state !== S.DIVE) return;
+    requestAnimationFrame(diveStep);
+  }
+  requestAnimationFrame(diveStep);
+
+  // Parachute descent
+  setTimeout(parachuteStep, 300);
+}
+
+function parachuteStep() {
+  if (state !== S.PARACHUTE) return;
+  diveVY = Math.min(diveVY + 0.04, 1.4); // gentle terminal
+  charY += diveVY;
+
+  const landY = POOL_Y - CH + 5;
+  if (charY >= landY) {
+    charY  = landY;
+    sfxSplash();
+    animTick = 0;
+    state  = S.LANDING;
+    setFB('SPLASH! LEVEL COMPLETE!', C.CYAN);
+    setTimeout(() => {
+      state = S.LEVEL_DONE;
+      sfxLevelUp();
+    }, 600);
+    setTimeout(() => nextLevel(), 2800);
+    return;
+  }
+  requestAnimationFrame(parachuteStep);
+}
+
+// ── Game flow ─────────────────────────────────────────────────
+function startGame() {
+  // age 6 → level 1, age 8 → level 2, age 12 → level 5  (capped at 1 minimum)
+  level          = Math.max(1, Math.round((playerAge - 5) * 0.7));
+  rung           = 0;
+  score          = 0;
+  // skill starts at neutral (10) shifted by age: age 6→6, age 8→10, age 12→18, capped 2-18
+  skillPts       = Math.min(18, Math.max(2, 10 + (playerAge - 8) * 2));
+  answersBlocked = false;
+  document.getElementById('ain').placeholder = '?';
+  placeOnRung(0);
+  currentQ = genQ();
+  showQuestion();
+  state = S.PLAYING;
+}
+
+function nextLevel() {
+  level++;
+  rung       = 0;
+  skillPts   = Math.min(20, skillPts + 1);
+  answersBlocked = false;
+  placeOnRung(0);
+  currentQ = genQ();
+  showQuestion();
+  state    = S.PLAYING;
+}
+
+// ── Answer submission ─────────────────────────────────────────
+function submitAnswer() {
+  if (answersBlocked || state !== S.PLAYING) return;
+  const raw = document.getElementById('ain').value.trim();
+  if (raw === '') return;
+  const num = parseInt(raw, 10);
+  if (isNaN(num)) { setFB('ENTER A NUMBER!', C.YELLOW); return; }
+
+  answersBlocked = true;
+
+  if (num === currentQ.ans) {
+    skillPts = Math.min(20, skillPts + 1);
+    score   += 10 * level;
+    sfxCorrect();
+    setFB(`CORRECT! +${10 * level}`, C.GREEN);
+    const prev = rung;
+    rung = Math.min(MAX_RUNGS, rung + 1);
+
+    if (rung >= MAX_RUNGS) {
+      animateMove(prev, MAX_RUNGS, () => startCelebration());
+    } else {
+      state = S.MOVE_UP;
+      animateMove(prev, rung, () => {
+        state = S.PLAYING;
+        currentQ = genQ();
+        showQuestion();
+        answersBlocked = false;
+      });
+    }
+  } else {
+    skillPts = Math.max(0, skillPts - 1);
+    sfxWrong();
+    setFB(`WRONG! ANS = ${currentQ.ans}`, C.RED);
+    const prev = rung;
+    rung = Math.max(0, rung - 1);
+
+    state = S.MOVE_DOWN;
+    animateMove(prev, rung, () => {
+      state = S.PLAYING;
+      currentQ = genQ();
+      showQuestion();
+      answersBlocked = false;
+    });
+  }
+}
+
+// ── Start-screen age submission ───────────────────────────────
+function submitAge() {
+  const raw = document.getElementById('ain').value.trim();
+  const age = parseInt(raw, 10);
+  if (isNaN(age) || age < 4 || age > 18) {
+    setFB('ENTER AGE  4 - 18', C.YELLOW);
+    setQ('HOW OLD ARE YOU? (4-18)');
+    return;
+  }
+  playerAge = age;
+  setQ(`STARTING FOR AGE ${age}...`);
+  setFB('', '');
+  setTimeout(startGame, 600);
+}
+
+// ── Button / key handlers ─────────────────────────────────────
+document.getElementById('okbtn').addEventListener('click', () => {
+  if (state === S.START) submitAge(); else submitAnswer();
+});
+
+document.getElementById('ain').addEventListener('keydown', e => {
+  if (e.key === 'Enter') {
+    if (state === S.START) submitAge(); else submitAnswer();
+  }
+});
+
+// ── Numpad ────────────────────────────────────────────────────
+(function buildNumpad() {
+  const keys = ['7','8','9','⌫','4','5','6','_','1','2','3','_','_','0','_','✓'];
+  const pad  = document.getElementById('numpad');
+  keys.forEach(k => {
+    const d = document.createElement('div');
+    d.className = 'nk';
+    if (k === '⌫') d.classList.add('del');
+    if (k === '✓') d.classList.add('ok');
+    if (k === '_') { d.classList.add('blank'); }
+    else {
+      d.textContent = k;
+      d.addEventListener('click', () => {
+        const inp = document.getElementById('ain');
+        if (k === '⌫') { inp.value = inp.value.slice(0, -1); }
+        else if (k === '✓') { if (state === S.START) submitAge(); else submitAnswer(); }
+        else if (inp.value.length < 5) inp.value += k;
+      });
+    }
+    pad.appendChild(d);
+  });
+})();
+
+// ── Main render loop ──────────────────────────────────────────
+function loop() {
+  animTick++;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  switch (state) {
+    case S.START:      drawStartScreen(); break;
+    case S.LEVEL_DONE: drawLevelDone();   break;
+    default:           drawGameScene();   break;
+  }
+
+  requestAnimationFrame(loop);
+}
+
+// ── Init ──────────────────────────────────────────────────────
+function init() {
+  resize();
+  window.addEventListener('resize', () => { resize(); });
+
+  setQ('HOW OLD ARE YOU? (4-18)');
+  setFB('TYPE YOUR AGE  THEN OK', C.CYAN);
+  document.getElementById('ain').placeholder = 'AGE';
+
+  requestAnimationFrame(loop);
+}
+
+init();
+</script>
+</body>
+</html>
