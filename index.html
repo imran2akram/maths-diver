@@ -658,7 +658,7 @@ function startGame() {
   level          = Math.max(1, Math.round((playerAge - 5) * 0.7));
   rung           = 0;
   score          = 0;
-  // skill starts at neutral (10) shifted by age: age 6→2, age 8→10, age 12→18, capped 2-18
+  // skill starts at neutral (10) shifted by age: age 6→6, age 8→10, age 12→18, capped 2-18
   skillPts       = Math.min(18, Math.max(2, 10 + (playerAge - 8) * 2));
   answersBlocked = false;
   document.getElementById('ain').placeholder = '?';
